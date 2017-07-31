@@ -1,0 +1,190 @@
+#!/usr/bin/python3
+
+#   Copyright 2017 Philip Tromans
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+
+import argparse
+import itertools
+import json
+import os
+import random
+import shutil
+import sys
+
+import bing_maps
+import mapswipe
+from proportional_allocator import ProportionalAllocator
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('project_ids', metavar='<project_id>', type=int, nargs='+',
+                        help='Project IDs to use to generate the dataset.')
+    parser.add_argument('--bing-maps-key', '-k', metavar='<bing_maps_api_key>', required=True,
+                        help='Bing Maps API key to use to download map tiles.')
+    parser.add_argument('--output-dir', '-o', metavar='<output_directory>', default='dataset',
+                        help='Output directory to generate dataset in. Default: "dataset".')
+    parser.add_argument('--seed', '-s', metavar='<random_seed>', default=0, type=int,
+                        help='The random seed to use when picking tiles, this allows generated datasets to be '
+                             'reproducible. Default: 0.')
+    parser.add_argument('--max-size', '-n', metavar='<class_size>', default=sys.maxsize, type=int,
+                        help='The maximum total number of items per class to output for each output subset ("train", '
+                             '"valid", etc.')
+
+    args = parser.parse_args()
+
+    output_dir = args.output_dir
+    if os.path.exists(output_dir):
+        if query_yes_no('Directory {} already exists. Delete?'.format(output_dir), default='no') == 'yes':
+            shutil.rmtree(output_dir)
+        else:
+            exit()
+
+    bing_maps_client = bing_maps.BingMapsClient(args.bing_maps_key)
+
+    built_floor = 1
+    bad_imagery_floor = 1
+    built_tiles = []
+    bad_imagery_tiles = []
+    empty_tiles = []
+
+    for project_id in args.project_ids:
+        print('Preselecting tiles from project (#{})... '.format(project_id))
+
+        with mapswipe.get_project_details_file(project_id, verbose=True) as project_details_file:
+            project_details = json.load(project_details_file)
+
+        annotated_tiles = set()
+        # Normally, we'd just iterate through project details and do our stuff. But project_details is a big blob,
+        # so instead we dismantle it as we go, in the hope that we'll lower our overall memory usage.
+        while project_details:
+            task = project_details.pop()
+            quadkey = bing_maps.tile_to_quadkey((int(task['task_x']), int(task['task_y'])), int(task['task_z']))
+            annotated_tiles.add(quadkey)
+
+            if task['yes_count'] >= built_floor and task['maybe_count'] == 0 and task['bad_imagery_count'] == 0:
+                built_tiles.append(quadkey)
+            elif task['yes_count'] == 0 and task['maybe_count'] == 0 and task['bad_imagery_count'] >= bad_imagery_floor:
+                bad_imagery_tiles.append(quadkey)
+
+        all_tiles = set(mapswipe.get_all_tile_quadkeys(project_id))
+        empty_tiles += list(all_tiles - annotated_tiles)
+
+    classes_and_proportions = {'train': 80, 'valid': 10, 'test': 10}
+    allocator = ProportionalAllocator(classes_and_proportions)
+
+    tile_classes = ['built', 'bad_imagery', 'empty']
+    for x in itertools.product(['train', 'valid'], tile_classes):
+        os.makedirs(os.path.join(output_dir, *x))
+
+    os.makedirs(os.path.join(output_dir, 'test'))
+
+    random.seed(args.seed)
+
+    random.shuffle(built_tiles)
+    random.shuffle(bad_imagery_tiles)
+    # We sort empty_tiles, because they start off in a randomish order, because they've come out of a set. We want to
+    #  be able to reproduce datasets based on the random seed, so to get consistent random shuffles, we need to start
+    #  from a consistent base. It's a bit naff though...
+    empty_tiles.sort()
+    random.shuffle(empty_tiles)
+
+    with open(os.path.join(output_dir, 'test', 'solutions.csv'), 'w') as solutions_file:
+        while built_tiles and bad_imagery_tiles and empty_tiles and allocator.total < args.max_size:
+            sample_built = pick_from(built_tiles, bing_maps_client)
+            sample_bad_imagery = pick_from(bad_imagery_tiles, bing_maps_client)
+            sample_empty = pick_from(empty_tiles, bing_maps_client)
+
+            if sample_built is not None and sample_bad_imagery is not None and sample_empty is not None:
+                clazz = allocator.allocate()
+
+                if clazz == 'test':
+                    output_tile(sample_built, os.path.join(output_dir, clazz))
+                    output_tile(sample_bad_imagery, os.path.join(output_dir, clazz))
+                    output_tile(sample_empty, os.path.join(output_dir, clazz))
+
+                    solutions_file.write(sample_built + ',built\n')
+                    solutions_file.write(sample_bad_imagery + ',bad_imagery\n')
+                    solutions_file.write(sample_empty + ',empty\n')
+                    solutions_file.flush()
+                else:
+                    output_tile(sample_built, os.path.join(output_dir, clazz, 'built'))
+                    output_tile(sample_bad_imagery, os.path.join(output_dir, clazz, 'bad_imagery'))
+                    output_tile(sample_empty, os.path.join(output_dir, clazz, 'empty'))
+
+            sys.stdout.write('\rTiles picked: {} in each of {}'.format(allocator, tile_classes))
+
+        sys.stdout.write('\n')
+
+
+def pick_from(pool, bing_maps_client):
+    while pool:
+        quadkey = pool.pop()
+
+        tile_path = mapswipe.get_tile_path(quadkey)
+
+        if not os.path.exists(tile_path):
+            bing_maps_client.fetch_tile(quadkey, tile_path)
+
+        if os.path.getsize(tile_path) > 0:
+            return quadkey
+
+    return None
+
+
+def output_tile(quadkey, output_path):
+    tile_path = mapswipe.get_tile_path(quadkey)
+    destination_path = os.path.join(output_path, quadkey + '.jpg')
+
+    if sys.platform == 'linux' or sys.platform == 'darwin':
+        os.symlink(tile_path, destination_path)
+    else:
+        shutil.copy(tile_path, destination_path)
+
+
+# From http://code.activestate.com/recipes/577058/
+def query_yes_no(question, default="yes"):
+    """Ask a yes/no question via raw_input() and return their answer.
+
+    "question" is a string that is presented to the user.
+    "default" is the presumed answer if the user just hits <Enter>.
+        It must be "yes" (the default), "no" or None (meaning
+        an answer is required of the user).
+
+    The "answer" return value is one of "yes" or "no".
+    """
+    valid = {"yes": "yes", "y": "yes", "ye": "yes",
+             "no": "no", "n": "no"}
+    if default is None:
+        prompt = " [y/n] "
+    elif default == "yes":
+        prompt = " [Y/n] "
+    elif default == "no":
+        prompt = " [y/N] "
+    else:
+        raise ValueError("invalid default answer: '%s'" % default)
+
+    while 1:
+        sys.stdout.write(question + prompt)
+        choice = input().lower()
+        if default is not None and choice == '':
+            return default
+        elif choice in valid.keys():
+            return valid[choice]
+        else:
+            sys.stdout.write("Please respond with 'yes' or 'no' "
+                             "(or 'y' or 'n').\n")
+
+
+main()
