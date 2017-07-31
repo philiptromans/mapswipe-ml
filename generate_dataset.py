@@ -55,9 +55,9 @@ def main():
 
     built_floor = 1
     bad_imagery_floor = 1
-    built_tiles = []
-    bad_imagery_tiles = []
-    empty_tiles = []
+    built_tiles = set()
+    bad_imagery_tiles = set()
+    empty_tiles = set()
 
     for project_id in args.project_ids:
         print('Preselecting tiles from project (#{})... '.format(project_id))
@@ -74,12 +74,12 @@ def main():
             annotated_tiles.add(quadkey)
 
             if task['yes_count'] >= built_floor and task['maybe_count'] == 0 and task['bad_imagery_count'] == 0:
-                built_tiles.append(quadkey)
+                built_tiles.add(quadkey)
             elif task['yes_count'] == 0 and task['maybe_count'] == 0 and task['bad_imagery_count'] >= bad_imagery_floor:
-                bad_imagery_tiles.append(quadkey)
+                bad_imagery_tiles.add(quadkey)
 
         all_tiles = set(mapswipe.get_all_tile_quadkeys(project_id))
-        empty_tiles += list(all_tiles - annotated_tiles)
+        empty_tiles |= (all_tiles - annotated_tiles)
 
     classes_and_proportions = {'train': 80, 'valid': 10, 'test': 10}
     allocator = ProportionalAllocator(classes_and_proportions)
@@ -90,13 +90,22 @@ def main():
 
     os.makedirs(os.path.join(output_dir, 'test'))
 
+    # We have to sort all of the tiles in sets. This is because some project boundaries overlap, and so it's possible
+    #  for us to pick a tile twice. We then have to sort these sets, so that when we shuffle them we start from a
+    # consistent base. We allow the use to set a random seed for the shuffling, so this means that it's possible to
+    # reproduce a dataset.
+
     random.seed(args.seed)
 
+    built_tiles = list(built_tiles)
+    built_tiles.sort()
     random.shuffle(built_tiles)
+
+    bad_imagery_tiles = list(bad_imagery_tiles)
+    bad_imagery_tiles.sort()
     random.shuffle(bad_imagery_tiles)
-    # We sort empty_tiles, because they start off in a randomish order, because they've come out of a set. We want to
-    #  be able to reproduce datasets based on the random seed, so to get consistent random shuffles we need to start
-    #  from a consistent base. It's a bit naff though...
+
+    empty_tiles = list(empty_tiles)
     empty_tiles.sort()
     random.shuffle(empty_tiles)
 
