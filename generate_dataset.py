@@ -95,7 +95,7 @@ def main():
     random.shuffle(built_tiles)
     random.shuffle(bad_imagery_tiles)
     # We sort empty_tiles, because they start off in a randomish order, because they've come out of a set. We want to
-    #  be able to reproduce datasets based on the random seed, so to get consistent random shuffles, we need to start
+    #  be able to reproduce datasets based on the random seed, so to get consistent random shuffles we need to start
     #  from a consistent base. It's a bit naff though...
     empty_tiles.sort()
     random.shuffle(empty_tiles)
