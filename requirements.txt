@@ -1,0 +1,2 @@
+mapswipe-ml-dataset-generator:
+Shapely>=1.5.17
