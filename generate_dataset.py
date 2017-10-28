@@ -57,7 +57,6 @@ def main():
     bad_imagery_floor = 1
 
     classes_and_proportions = {'train': 80, 'valid': 10, 'test': 10}
-    allocator = ProportionalAllocator(classes_and_proportions)
 
     tile_classes = ['built', 'bad_imagery', 'empty']
     for x in itertools.product(['train', 'valid'], tile_classes):
@@ -71,6 +70,8 @@ def main():
 
     with open(os.path.join(output_dir, 'test', 'solutions.csv'), 'w') as solutions_file:
         for project_id in args.project_ids:
+            allocator = ProportionalAllocator(classes_and_proportions)
+            
             print('Selecting tiles from project (#{})... '.format(project_id))
             fresh_project_tiles = set(mapswipe.get_all_tile_quadkeys(project_id)) - all_tiles
 
@@ -143,7 +144,7 @@ def main():
 
                 sys.stdout.write('\r\tTiles picked: {} in each of {}. Total: {}'.format(allocator, tile_classes, allocator.total * 3))
 
-    sys.stdout.write('\n')
+            sys.stdout.write('\n')
 
 
 def pick_from(pool, bing_maps_client):
