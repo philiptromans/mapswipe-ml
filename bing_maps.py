@@ -149,3 +149,33 @@ def tiles_in_pixel_box(bounds):
 
     return itertools.product(range(top_left_tile[0], bottom_right_tile[0] + 1),
                              range(top_left_tile[1], bottom_right_tile[1] + 1))
+
+
+def quadkey_to_tile(quadkey):
+    tile_x = 0
+    tile_y = 0
+    level_of_detail = len(quadkey);
+
+    for i in range(level_of_detail, 0, -1):
+        mask = 1 << (i - 1)
+        if quadkey[level_of_detail - i] == '0':
+            continue
+        elif quadkey[level_of_detail - i] == '1':
+            tile_x |= mask
+        elif quadkey[level_of_detail - i] == '2':
+            tile_y |= mask
+        elif quadkey[level_of_detail - i] == '3':
+            tile_x |= mask
+            tile_y |= mask
+        else:
+            raise (LookupError('Invalid quadkey character'))
+
+    return tile_x, tile_y, level_of_detail
+
+
+def quadkey_to_url(quadkey):
+    tile = quadkey_to_tile(quadkey)
+
+    lat, long = pixel_to_latlong(tile_to_pixel(tile), tile[2])
+
+    return "http://bing.com/maps/default.aspx?cp={}~{}&lvl={}&style=a".format(lat, long, len(quadkey));
