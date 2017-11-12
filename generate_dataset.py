@@ -68,8 +68,13 @@ def main():
     # (sometimes the boundaries overlap a little)
     all_tiles = set()
 
+    total_tile_groups_written = 0
+
     with open(os.path.join(output_dir, 'test', 'solutions.csv'), 'w') as solutions_file:
         for project_id in args.project_ids:
+            if total_tile_groups_written >= args.max_size:
+                return
+
             allocator = ProportionalAllocator(classes_and_proportions)
             
             print('Selecting tiles from project (#{})... '.format(project_id))
@@ -120,7 +125,7 @@ def main():
             empty_tiles.sort()
             random.shuffle(empty_tiles)
 
-            while built_tiles and bad_imagery_tiles and empty_tiles and allocator.total < args.max_size:
+            while built_tiles and bad_imagery_tiles and empty_tiles and total_tile_groups_written < args.max_size:
                 sample_built = pick_from(built_tiles, bing_maps_client)
                 sample_bad_imagery = pick_from(bad_imagery_tiles, bing_maps_client)
                 sample_empty = pick_from(empty_tiles, bing_maps_client)
@@ -128,6 +133,7 @@ def main():
                 if sample_built is not None and sample_bad_imagery is not None and sample_empty is not None:
                     clazz = allocator.allocate()
 
+                    total_tile_groups_written += 1
                     if clazz == 'test':
                         output_tile(sample_built, os.path.join(output_dir, clazz))
                         output_tile(sample_bad_imagery, os.path.join(output_dir, clazz))
