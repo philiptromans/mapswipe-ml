@@ -69,7 +69,7 @@ def main():
     for x in itertools.product(['train', 'valid'], tile_classes):
         os.makedirs(os.path.join(output_dir, *x))
 
-    os.makedirs(os.path.join(output_dir, 'test'))
+    os.makedirs(os.path.join(output_dir, inner_test_dir))
 
     # We have to store all of the tiles in a set to stop us from selecting the same tile twice if it appears in multiple projects
     # (sometimes the boundaries overlap a little)
