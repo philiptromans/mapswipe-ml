@@ -41,6 +41,8 @@ def main():
     parser.add_argument('--max-size', '-n', metavar='<class_size>', default=sys.maxsize, type=int,
                         help='The maximum total number of items per class to output for each output subset ("train", '
                              '"valid", etc.')
+    parser.add_argument('--inner-test-dir-for-keras', action='store_true',
+                        help='Create an extra directory inside the test directory (useful when working with Keras)')
 
     args = parser.parse_args()
 
@@ -50,6 +52,11 @@ def main():
             shutil.rmtree(output_dir)
         else:
             exit()
+
+    if args.inner_test_dir_for_keras:
+        inner_test_dir = 'test/test'
+    else:
+        inner_test_dir = 'test'
 
     bing_maps_client = bing_maps.BingMapsClient(args.bing_maps_key)
 
@@ -76,9 +83,10 @@ def main():
                 return
 
             allocator = ProportionalAllocator(classes_and_proportions)
-            
+
             print('Selecting tiles from project (#{})... '.format(project_id))
-            fresh_project_tiles = set(mapswipe.get_all_tile_quadkeys(project_id)) - all_tiles
+            fresh_project_tiles = set(
+                mapswipe.get_all_tile_quadkeys(project_id)) - all_tiles
 
             built_tiles = set()
             bad_imagery_tiles = set()
@@ -89,10 +97,12 @@ def main():
 
             annotated_tiles = set()
             # Normally, we'd just iterate through project details and do our stuff. But project_details is a big blob,
-            # so instead we dismantle it as we go, in the hope that we'll lower our overall memory usage.
+            # so instead we dismantle it as we go, in the hope that we'll lower
+            # our overall memory usage.
             while project_details:
                 task = project_details.pop()
-                quadkey = bing_maps.tile_to_quadkey((int(task['task_x']), int(task['task_y'])), int(task['task_z']))
+                quadkey = bing_maps.tile_to_quadkey(
+                    (int(task['task_x']), int(task['task_y'])), int(task['task_z']))
                 if quadkey not in fresh_project_tiles:
                     continue
 
@@ -112,7 +122,8 @@ def main():
             random.seed(args.seed)
 
             # The data structures are sets, so we have to sort after converting it to a list to gives us a stable sort order (so that you can generate the same dataset with just a random seed).
-            # Obviously this goes out the window if the ground truth data changes at MapSwipe's end.
+            # Obviously this goes out the window if the ground truth data
+            # changes at MapSwipe's end.
             built_tiles = list(built_tiles)
             built_tiles.sort()
             random.shuffle(built_tiles)
@@ -127,7 +138,8 @@ def main():
 
             while built_tiles and bad_imagery_tiles and empty_tiles and total_tile_groups_written < args.max_size:
                 sample_built = pick_from(built_tiles, bing_maps_client)
-                sample_bad_imagery = pick_from(bad_imagery_tiles, bing_maps_client)
+                sample_bad_imagery = pick_from(
+                    bad_imagery_tiles, bing_maps_client)
                 sample_empty = pick_from(empty_tiles, bing_maps_client)
 
                 if sample_built is not None and sample_bad_imagery is not None and sample_empty is not None:
@@ -135,20 +147,28 @@ def main():
 
                     total_tile_groups_written += 1
                     if clazz == 'test':
-                        output_tile(sample_built, os.path.join(output_dir, clazz))
-                        output_tile(sample_bad_imagery, os.path.join(output_dir, clazz))
-                        output_tile(sample_empty, os.path.join(output_dir, clazz))
+                        output_tile(sample_built, os.path.join(
+                            output_dir, inner_test_dir))
+                        output_tile(sample_bad_imagery,
+                                    os.path.join(output_dir, inner_test_dir))
+                        output_tile(sample_empty, os.path.join(
+                            output_dir, inner_test_dir))
 
                         solutions_file.write(sample_built + ',built\n')
-                        solutions_file.write(sample_bad_imagery + ',bad_imagery\n')
+                        solutions_file.write(
+                            sample_bad_imagery + ',bad_imagery\n')
                         solutions_file.write(sample_empty + ',empty\n')
                         solutions_file.flush()
                     else:
-                        output_tile(sample_built, os.path.join(output_dir, clazz, 'built'))
-                        output_tile(sample_bad_imagery, os.path.join(output_dir, clazz, 'bad_imagery'))
-                        output_tile(sample_empty, os.path.join(output_dir, clazz, 'empty'))
+                        output_tile(sample_built, os.path.join(
+                            output_dir, clazz, 'built'))
+                        output_tile(sample_bad_imagery, os.path.join(
+                            output_dir, clazz, 'bad_imagery'))
+                        output_tile(sample_empty, os.path.join(
+                            output_dir, clazz, 'empty'))
 
-                sys.stdout.write('\r\tTiles picked: {} in each of {}. Total: {}'.format(allocator, tile_classes, allocator.total * 3))
+                sys.stdout.write('\r\tTiles picked: {} in each of {}. Total: {}'.format(
+                    allocator, tile_classes, allocator.total * 3))
 
             sys.stdout.write('\n')
 
