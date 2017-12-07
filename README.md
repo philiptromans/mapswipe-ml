@@ -1,5 +1,5 @@
 # mapswipe-ml
-A suite of tools for doing machine learning with the data from [Mapswipe](https://mapswipe.org/). Hopefully this project will grow into something that can be useful to the project.
+A suite of tools for doing machine learning with the data from [Mapswipe](https://mapswipe.org/). Hopefully this project will grow into something that can be useful to MapSwipe, and the wider [Missing Maps](http://www.missingmaps.org/) community.
 
 
 ## generate_dataset.py
