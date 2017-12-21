@@ -11807,7 +11807,7 @@ div#notebook {
 <pre><code>python3 generate_dataset.py 124 303 407 692 1166 1333 1440 1599 1788 1901 2020 2158 2293 2473 2644 2671 2809 2978 3121 3310 3440 3610 3764 3906 4103 4242 4355 4543 4743 4877 5061 5169 5291 5368 5519 5688 5870 5990 6027 6175 6310 6498 6628 6637 6646 6794 6807 6918 6930 7049 7056 7064 7108 7124 7125 7260 7280 7281 7605 7738 7871 8059 8324 -k &lt;bing maps api key&gt; -o experiment_1/all_projects_dataset --inner-test-dir-for-keras</code></pre>
 <p>To actually create the model, I used <a href="https://keras.io">Keras</a> to fine-tune Google's InceptionV3 model. This means removing its top layer of output neurons, and replacing them with three fully connected output neurons (one for each class), with a Softmax output (see the script for exact details - I've omitted a couple of layers for brevity). During the training process, only the top (newly added) layers are trained.</p>
 <pre><code>python3 train.py --dataset-dir experiment_1/all_projects_dataset --output-dir experiment_1/inception_v3_fine_tuned --fine-tune --num-epochs 1</code></pre>
-<p>After one epoch of training, you get a model with a validation accuracy of approximately 54%. With extra epochs of fine tuning this increases slightly, but I didn't feel that it was particularly worth doing. Instead, I thought about the ImageNet problem. ImageNet is primarily around identifying one object, which dominates the foreground of any particular photo. MapSwipe is fundamentally different, in that it's more about considering the whole image, and any piece of the image may either have something obscuring it (in the case of bad imagery), or a building, which changes the entire image's classification. The objects being identified are less complex than ImageNet (where you need to be able to, say, differentiate between a cat's face and a dog's), but the whole image is more important in the MapSwipe problem (whereas ImageNet has a better separation of foreground and background). Considering this hypothesis, I decided to train all layers of ImageNet for several epochs:</p>
+<p>After one epoch of training, you get a model with a validation accuracy of approximately 54%. With extra epochs of fine tuning this increases slightly, but I didn't feel that it was particularly worth doing. Instead, I thought about the ImageNet problem. ImageNet is primarily concerned with identifying the one object that dominates the foreground of any particular photo. MapSwipe is fundamentally different, in that it's more about considering the whole image, and any piece of the image may either have something obscuring it (in the case of bad imagery), or a building, which changes the entire image's classification. The objects being identified are less complex than ImageNet (where you need to be able to, say, differentiate between a cat's face and a dog's), but the whole image is more important in the MapSwipe problem (whereas ImageNet has a better separation of foreground and background). Considering this hypothesis, I decided to train all layers of ImageNet for several epochs:</p>
 <pre><code>python3 train.py --dataset-dir experiment_1/all_projects_dataset --output-dir experiment_1/inception_v3_all_layers --num-epochs 10 --start_model experiment_1/inception_v3_fine_tuned/model.01-0.906-0.539.hdf5</code></pre>
 <p>I let it train for 9 epochs before stopping it (I was using an Amazon AWS P3.2xlarge instance, which isn't cheap) to see how it was progressing. The final trained model had a validation accuracy of 65%. The accuracy was always increasing, but the rate of increase had slowed significantly. I suspect that there's more improvement to be made by training for longer, but I wanted to start analysing the results.</p>
 <p>To classify the test set:</p>
@@ -11960,7 +11960,7 @@ div#notebook {
 </div>
 <div class="inner_cell">
 <div class="text_cell_render border-box-sizing rendered_html">
-<p>The rows correspond to what our model predicted, and the columns correspond to the official solution. If our model was perfect, we'd expect to have non-zero entries on the main diagonal, and zeroes everywhere else. The biggest non-zero entry corresponds to examples that officially (according to the MapSwipe data) are bad imagery, but our model has classified as empty. Let's take a look at the examples where we were most confident that the imagery was empty, but was actually bad (according to the official solution).</p>
+<p>The rows correspond to what our model predicted, and the columns correspond to the official solution. If our model was perfect, we'd expect to have non-zero entries on the main diagonal (top left to bottom right), and zeroes everywhere else. The biggest non-zero entry corresponds to examples that officially (according to the MapSwipe data) are bad imagery, but our model has classified as empty. Let's take a look at the examples where we were most confident that the imagery was empty, but was actually bad (according to the official solution).</p>
 </div>
 </div>
 </div>
@@ -12122,10 +12122,10 @@ div#notebook {
 </div>
 <div class="output_area">
 <div class="prompt"></div>
-<div id="dece466f-8e10-4e8e-bc63-9146274153ac"></div>
+<div id="6b472f51-6089-4aa9-b5f8-a6c082684e0f"></div>
 <div class="output_subarea output_javascript ">
 <script type="text/javascript">
-var element = $('#dece466f-8e10-4e8e-bc63-9146274153ac');
+var element = $('#6b472f51-6089-4aa9-b5f8-a6c082684e0f');
 
 (function(root) {
   function now() {
@@ -12405,10 +12405,10 @@ var element = $('#dece466f-8e10-4e8e-bc63-9146274153ac');
 </div>
 <div class="output_area">
 <div class="prompt"></div>
-<div id="032cd7f9-4c20-455e-952e-da9808124ac0"></div>
+<div id="14839684-6c79-40dd-ac9f-c4eb6176c629"></div>
 <div class="output_subarea output_javascript ">
 <script type="text/javascript">
-var element = $('#032cd7f9-4c20-455e-952e-da9808124ac0');
+var element = $('#14839684-6c79-40dd-ac9f-c4eb6176c629');
 (function(root) {
   function embed_document(root) {
     
@@ -12457,7 +12457,7 @@ var element = $('#032cd7f9-4c20-455e-952e-da9808124ac0');
 <li>To include a tile in the dataset, I required at least one vote for a particular category, and no votes for the others. I suspect that increasing the vote threshold would produce more accurate models. This will have the effect of lowering the number of tiles in the dataset though, which isn't ideal. The other problem with this is that it's not possible to do consistently - empty tiles aren't explicitly marked as empty by MapSwipe users, they're just not marked at all. It's difficult to tell whether or not an image has been seen multiple times (although you can estimate it according to how often its explicitly marked neighbours have been viewed - this leads to its own problems in terms of bias though).</li>
 <li>We could request more votes from users for tiles that the model has confidently classified, but classified incorrectly according to the official MapSwipe data. This'll require engineering, and user's time, but I think it's the most promising solution. To get a high quality model, a large amount of high quality data will be needed.</li>
 </ul>
-<p>If we consider the engineering problem previously suggested, it provides an opportunity to consider a fundamentally different data model. I propose that the data model should consist of a set of tiles. For each tile, a number of questions can be asked. For instance, "Does this tile contain any buildings?". The answer to this question is yes, no or maybe. Multiple questions can be assigned to a tile, which allows a tile to simultaneously contain buildings and be bad imagery (if it's partially obscured by cloud), which can't happen in the current model (but will act to confound many simple ML models). It also allows tiles to be explicitly marked as empty by users, as opposed to just being skipped, and not having any data recorded.</p>
+<p>If we consider the engineering problem previously suggested, it provides an opportunity to consider a fundamentally different data model. I propose that the data model should consist of a set of tiles. For each tile, a number of questions can be asked. For instance, "Does this tile contain any buildings?". The answer to this question is yes, no or maybe. Multiple questions can be assigned to a tile, which allows a tile to simultaneously contain buildings and be bad imagery (if it's partially obscured by cloud), which can't happen in the current model (but will act to confound many simple ML models). It also allows tiles to be explicitly marked as empty by users, as opposed to just being skipped, and not having any data recorded. This is critically important for training ML models in future, as the empty tiles are just as important as the built ones, and we must have a large amount of confidence in the training dataset's annotations for both categories.</p>
 </div>
 </div>
 </div>
