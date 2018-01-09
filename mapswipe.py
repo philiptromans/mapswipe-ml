@@ -67,6 +67,26 @@ def get_project_details_file(project_id, verbose=True):
     return open(project_details_path)
 
 
+def get_all_buildings_only_projects():
+    target_categories = ['buildings only', 'buildings']
+
+    with urllib.request.urlopen("http://api.mapswipe.org/projects.json") as url:
+        raw_projects = json.loads(url.read().decode())
+
+    all_projects = {}
+    for project_id, project_details in sorted(raw_projects.items(), key=lambda x: int(x[0])):
+        if 'name' not in project_details:
+            continue
+        if project_details['progress'] != 100:
+            continue
+
+        lookFor = project_details['lookFor'].lower()
+        if lookFor in target_categories:
+            all_projects[project_id] = project_details['name']
+    
+    return all_projects
+
+
 def get_all_tile_quadkeys(project_id, verbose=True):
     all_tiles_path = os.path.join(working_dir_path, str(project_id), 'all_tiles.pickled')
 

@@ -26,6 +26,12 @@ import bing_maps
 import mapswipe
 from proportional_allocator import ProportionalAllocator
 
+# Not all datasets are bad_imagery, built, empty.
+# bad_imagery, yes and no are always the correct answers. It's nice to redefine these though, but would need to write down their new names.
+
+# TODO: The current approach potentially unnecessarily bins useful training data by capping the size of the output dataset on a per-project
+# basis. It'd be better to take as many as you can from each project, and accruing the remainder as you go along
+# This would then allow you to create a mix-and-match cross-project final dataset.
 
 def main():
     parser = argparse.ArgumentParser()

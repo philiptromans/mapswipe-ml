@@ -12,6 +12,13 @@ from bing_maps import *
 import pandas as pd
 import mapswipe
 from pathlib import Path
+from collections import defaultdict, namedtuple
+import bing_maps
+
+TileVotes = namedtuple('TileVotes', ['yes_count', 'maybe_count', 'bad_imagery_count'])
+TileVotes.__iadd__ = lambda x,y: TileVotes(x.yes_count + y.yes_count,
+                     x.maybe_count + y.maybe_count,
+                     x.bad_imagery_count + y.bad_imagery_count)
 
 class_names = ['bad_imagery', 'built', 'empty']
 class_number_to_name = {k: v for k, v in enumerate(class_names)}
@@ -64,12 +71,27 @@ def cell_renderer(quadkey, solution):
         retVal += "Officially: {}<br>".format(solution.ground_truth[quadkey])
         retVal += "Predicted class: " + solution.predicted_class(quadkey) + "<br>"
     
-    retVal += "<img align=\"center\" src=\"mapswipe_working_dir/{}\"/>".format(os.path.relpath(mapswipe.get_tile_path(quadkey),
+    retVal += "<img align=\"center\" src=\"mapswipe_working_dir/{}\"/><br>".format(os.path.relpath(mapswipe.get_tile_path(quadkey),
                                                                          os.path.join(str(Path.home()),'.mapswipe')))
     if solution is not None:
         retVal += "PV:" + str(solution.prediction_vectors[quadkey])
     
     return retVal
+
+def get_all_tile_votes_for_projects(project_ids):
+    retval = defaultdict(lambda: TileVotes(0, 0, 0))
+
+    for project_id in project_ids:
+        with mapswipe.get_project_details_file(project_id) as project_details_file:
+            tile_json = json.loads(project_details_file.read())
+
+        for tile in tile_json:
+            quadkey = bing_maps.tile_to_quadkey((int(tile['task_x']), int(tile['task_y'])), int(tile['task_z']))
+            votes = TileVotes(tile['yes_count'], tile['maybe_count'], tile['bad_imagery_count'])
+            retval[quadkey] += votes
+    
+    return retval
+
 
 class Solution:
     def __init__(self, ground_truth, prediction_vectors):
